@@ -41,7 +41,9 @@
 | A Foregone Prophecy | Octopus | 280 | Create market with `closesAt` in past → resolve with seer token → settle → payout (past date accepted without server-side validation) |
 | Inside Line | Hippo | 300 | SSRF via `/api/partner-banks/{id}/discover` to `dmlink-config.internal` → JSON response contains `link_signing_key: D3E346z93-ecbT72d2c9a66e` → submitted to crwd-ctrl SUBMIT form |
 
-**Total earned: 5390 pts**
+| The Name Checks Out | Hippo | 200 | SQLi dump of `partner_bank_user` table reveals plaintext passwords → auth as `atlantis.h1pp0:7e3023bfc3bb1666fe3a0e76` via `POST /api/partner-banks/1/auth` → crwd-ctrl auto-detected |
+
+**Total earned: 5590 pts**
 
 ---
 
