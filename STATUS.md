@@ -43,7 +43,9 @@
 
 | The Name Checks Out | Hippo | 200 | SQLi dump of `partner_bank_user` table reveals plaintext passwords → auth as `atlantis.h1pp0:7e3023bfc3bb1666fe3a0e76` via `POST /api/partner-banks/1/auth` → crwd-ctrl auto-detected |
 
-**Total earned: 5590 pts**
+| Frozen Assets | Alpaca | 200 | SQLi reset grahman's (user 5) password → `POST /api/auth/reset-password` with token unlocks LOCKED account → login as grahman → `POST /api/bill-pay/payments` with `fromAccountNumber: "DMACC1005"` → auto-detected |
+
+**Total earned: 5790 pts**
 
 ---
 
