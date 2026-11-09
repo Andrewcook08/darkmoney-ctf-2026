@@ -31,7 +31,9 @@
 
 | Second Chances | Alpaca | 500 | SQLi to call `reset_password_token('pkapoor','Hacked123!')` via OR injection in `GET /api/transactions?search=` |
 
-**Total earned: 2920 pts**
+| Ask a Crooked Question | Alpaca | 340 | SQLi on oracle search → `oracle_service_secrets` table → `search_flag = 383342zBE-56aT13f3625` → submitted to crwd-ctrl |
+
+**Total earned: 3260 pts**
 
 ---
 
@@ -55,6 +57,12 @@
 - **Payload:** `%' OR reset_password_token('pkapoor','Hacked123!')>'a' OR '1'='`
 - **Why no `--`:** The `--` comment caused the UNION ALL from the template to remain in the SQL, generating bad grammar. Using `OR '1'='` to close the string instead keeps everything valid.
 - **Proof:** crwd-ctrl auto-detected (+500 pts), score now 2920
+
+### Ask a Crooked Question — 340 pts ✅
+- **Vulnerability:** SQLi on oracle search endpoint → cross-table exfiltration
+- **Exact request:** `GET /api/oracle/markets?search=...` with UNION SELECT from oracle_service_secrets
+- **Flag:** `383342zBE-56aT13f3625` (from `oracle_service_secrets` where `secret_key='search_flag'`)
+- **SQLi trick:** Use `TIMESTAMP '9999-12-31 00:00:00'` for future-date sort (sorts first), close string with `AND col>'` instead of `--`
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
