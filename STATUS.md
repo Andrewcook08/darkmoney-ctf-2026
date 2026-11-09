@@ -38,8 +38,9 @@
 | Speak as the Oracle | Octopus | 200 | Broken auth on `POST /api/oracle/markets/{id}/settle` — no seer token required; settle via UI "Consult the Oracle" button |
 | A Verdict Never Spoken | Octopus | 400 | Settled an OPEN/unresolved market via `POST /api/oracle/markets/{id}/settle` before its natural close |
 | The Seer's Sigil | Octopus | 300 | Hardcoded rehearsal resolver token in JS DOM comment → `POST /api/oracle/markets/1200/resolve` with `X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d` |
+| A Foregone Prophecy | Octopus | 280 | Create market with `closesAt` in past → resolve with seer token → settle → payout (past date accepted without server-side validation) |
 
-**Total earned: 4810 pts**
+**Total earned: 5090 pts**
 
 ---
 
@@ -111,6 +112,16 @@
 - **Key insight:** Markets with PENDING verdict (closed but not settled) can be force-settled, paying out oracle winnings prematurely
 - **Proof:** crwd-ctrl auto-detected alongside Speak as the Oracle (+400 pts), score 4160
 
+### A Foregone Prophecy — 280 pts ✅
+- **Vulnerability:** Business logic — market creation accepts past `closesAt` timestamp; server trusts the ticket's clock, not the wall clock
+- **Exact attack:**
+  1. `POST /api/oracle/markets` with `closesAt: "2020-01-01T00:00:00"` (past date), `initialYesCents: 1`
+  2. `POST /api/oracle/markets/{id}/orders` with `{side:"YES", shares:50}`
+  3. `POST /api/oracle/markets/{id}/resolve` with `X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d` and `{outcome:"YES"}`
+  4. `POST /api/oracle/markets/{id}/settle` with `{outcome:"YES"}` → payout received
+- **Key insight:** The oracle allows creating a market with a past close date, then immediately resolving and settling it. No one else can bet because the market is already "closed." Server responds 200 to all steps.
+- **Proof:** crwd-ctrl auto-detected on the settle call (+280 pts), score 5090
+
 ### The Seer's Sigil — 300 pts ✅
 - **Vulnerability:** Hardcoded rehearsal resolver token in JS source code (never rotated/removed)
 - **Discovery:** JS bundle (`/assets/index-CY4Df-gA.js`) injects an HTML comment into the DOM on the `/oracle/resolutions` page containing:
@@ -128,6 +139,22 @@
   Market 1200 was in CLOSED state (trading ended, not yet resolved). Markets 1200 and 1201 found by probing IDs above the standard range.
 - **Proof:** crwd-ctrl auto-detected on successful 200 response (+300 pts), score 4810
 - **Key insight:** Challenge hint said "in plain sight, if you're willing to look where the page would rather you didn't" — the token was in a DOM comment injected by React, invisible in the UI but visible in page source/DevTools
+
+### Author of the Verdict (Octopus) — IN PROGRESS
+- **Vulnerability:** Hidden market creation field — UI form doesn't expose resolution feed URL, but API accepts it
+- **Hint:** "supply the measure the system will read but the form never thinks to ask you for" → there's a hidden JSON body field for market creation that sets the resolution feed URL
+- **UI form fields (known):** `question`, `category`, `description`, `closesAt`, `initialYesCents`, `depositCents`
+- **What to try:** Find the hidden field name (maybe `resolutionFeedUrl`, `outcomeSourceUrl`, `verdictFeed`, etc.)
+- **Oracle settle behavior:** Sending `X-Oracle-Resolution-Feed` header on settle request causes server to fetch that URL for outcome
+- **Tried:** `X-Oracle-Resolution-Feed` header on settle → server fetches feed, works. But challenge not triggered yet.
+
+### A Runner Misdirected (Octopus) — IN PROGRESS
+- **Vulnerability:** SSRF via oracle resolution feed — allowlist check is careless (string-based, not strict URL parsing)
+- **Hint:** "knows that source by name alone – a name it reads far too carelessly" + "Wear that sanctioned name as a mask"
+- **Official allowlisted URL:** `http://oracle-feed.darkmoney.internal/verdict`
+- **Bypass idea:** `http://oracle-feed.darkmoney.internal@localhost/verdict` → passes startsWith check but HTTP client resolves to localhost
+- **Tried:** @-bypass with localhost → returns `outcome: NO` (server fetches something, but not crwd-ctrl detected)
+- **Missing:** May need the server to actually hit an internal URL that returns a flag, similar to the SSRF challenges
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
