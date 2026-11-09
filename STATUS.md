@@ -33,8 +33,10 @@
 
 | Ask a Crooked Question | Alpaca | 340 | SQLi on oracle search → `oracle_service_secrets` table → `search_flag = 383342zBE-56aT13f3625` → submitted to crwd-ctrl |
 | Trust Issues | Octopus | 300 | SSRF via `GET /api/cards/1/reward-points?rewardServiceUrl=http://localhost/internal/files/reward_client.json` → flag `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS` |
+| Speak as the Oracle | Octopus | 200 | Broken auth on `POST /api/oracle/markets/{id}/settle` — no seer token required; settle via UI "Consult the Oracle" button |
+| A Verdict Never Spoken | Octopus | 400 | Settled an OPEN/unresolved market via `POST /api/oracle/markets/{id}/settle` before its natural close |
 
-**Total earned: 3560 pts**
+**Total earned: 4160 pts**
 
 ---
 
@@ -74,6 +76,19 @@
   3. Use leaked path: `rewardServiceUrl=http://localhost/internal/files/reward_client.json` → 200 `{"flag":"DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS"}`
 - **Flag:** `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS`
 - **Submission:** CHALLENGE_KEY form on crwd-ctrl
+
+### Speak as the Oracle — 200 pts ✅
+- **Vulnerability:** Broken authorization — `POST /api/oracle/markets/{id}/settle` has no seer token check
+- **Exact request:** Click "Consult the Oracle" button on `/oracle/resolutions` page → triggers `POST /api/oracle/markets/1300/settle` via UI
+- **Key insight:** The settle endpoint "never asks whose hand is upon it" — no auth beyond session cookie
+- **Why UI required:** crwd-ctrl auto-detection required the request to come through the browser UI (via Axios), not a raw fetch
+- **Proof:** crwd-ctrl auto-detected (+200 pts), score 3760
+
+### A Verdict Never Spoken — 400 pts ✅
+- **Vulnerability:** Same broken auth as Speak as the Oracle, but settling a market BEFORE it closes (no declared outcome yet)
+- **Exact request:** Previously settled markets 1001, 1002, 1005 via `POST /api/oracle/markets/{id}/settle` on OPEN/CLOSED-but-unresolved markets
+- **Key insight:** Markets with PENDING verdict (closed but not settled) can be force-settled, paying out oracle winnings prematurely
+- **Proof:** crwd-ctrl auto-detected alongside Speak as the Oracle (+400 pts), score 4160
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
