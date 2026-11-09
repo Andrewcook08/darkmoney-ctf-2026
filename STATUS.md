@@ -37,8 +37,9 @@
 | Overreach | Hippo | 250 | SSRF via `POST /api/partner-banks/{id}/discover` to `169.254.169.254` → flag `B3D3C2zAD-254T609`; submitted to crwd-ctrl |
 | Speak as the Oracle | Octopus | 200 | Broken auth on `POST /api/oracle/markets/{id}/settle` — no seer token required; settle via UI "Consult the Oracle" button |
 | A Verdict Never Spoken | Octopus | 400 | Settled an OPEN/unresolved market via `POST /api/oracle/markets/{id}/settle` before its natural close |
+| The Seer's Sigil | Octopus | 300 | Hardcoded rehearsal resolver token in JS DOM comment → `POST /api/oracle/markets/1200/resolve` with `X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d` |
 
-**Total earned: 4510 pts**
+**Total earned: 4810 pts**
 
 ---
 
@@ -110,6 +111,24 @@
 - **Key insight:** Markets with PENDING verdict (closed but not settled) can be force-settled, paying out oracle winnings prematurely
 - **Proof:** crwd-ctrl auto-detected alongside Speak as the Oracle (+400 pts), score 4160
 
+### The Seer's Sigil — 300 pts ✅
+- **Vulnerability:** Hardcoded rehearsal resolver token in JS source code (never rotated/removed)
+- **Discovery:** JS bundle (`/assets/index-CY4Df-gA.js`) injects an HTML comment into the DOM on the `/oracle/resolutions` page containing:
+  ```
+  X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d
+  ```
+  Comment is visible via `document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT)`
+- **Exact request:**
+  ```
+  POST /api/oracle/markets/1200/resolve
+  X-Oracle-Resolver-Token: ORCL-RSLVR-7c4f9a2e8b1d
+  Content-Type: application/json
+  {"outcome": "YES"}
+  ```
+  Market 1200 was in CLOSED state (trading ended, not yet resolved). Markets 1200 and 1201 found by probing IDs above the standard range.
+- **Proof:** crwd-ctrl auto-detected on successful 200 response (+300 pts), score 4810
+- **Key insight:** Challenge hint said "in plain sight, if you're willing to look where the page would rather you didn't" — the token was in a DOM comment injected by React, invisible in the UI but visible in page source/DevTools
+
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
 - **Hint:** "An option removed from the screen is not an option forbidden. Find the path the interface does not offer, and fund a bill payment from the account that was told to sit still."
@@ -127,7 +146,9 @@
 
 Additional challenges are still locked (unlock by completing prerequisites):
 - Trex: 3 locked challenges
-- Alpaca: unclear count
+- Alpaca: 3 locked challenges
+- Octopus: 1 locked challenge (after Seer's Sigil — now unlocked: A Foregone Prophecy, Author of the Verdict, A Runner Misdirected)
+- Hippo: 2 locked challenges
 
 ---
 
