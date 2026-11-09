@@ -180,6 +180,23 @@ Additional challenges are still locked (unlock by completing prerequisites):
 
 ---
 
+## Login Instructions
+
+**URL:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net/login
+
+Two-step form: username → Continue → password → Login
+
+**Credentials** (from HTML source comment — "Whispers in the Source" challenge):
+- Username: `amorgan`
+- Password: `test@DM123!`
+
+To log in programmatically when session expires:
+```javascript
+fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'amorgan', password:'test@DM123!'})})
+```
+
+---
+
 ## Key API Endpoints
 
 | Endpoint | Method | Notes |
